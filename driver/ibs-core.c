@@ -482,7 +482,11 @@ static void destroy_ibs_devices(void)
 
 static void destroy_ibs_hotplug(void)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0)
+         cpus_read_lock();
+         cpuhp_remove_state(ibs_hotplug_notifier);
+         cpus_read_unlock();
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
 	get_online_cpus();
 	cpuhp_remove_state(ibs_hotplug_notifier);
 	put_online_cpus();
@@ -594,7 +598,11 @@ err_buffers:
 	/* Kernel versions older than 4.10 require some in-kernel locking
 	   around registering the hotplug notifier, or they could deadlock.
 	   See: https://patchwork.kernel.org/patch/3805711/ */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0)
+                /* 4.10 says just to use get_online_cpus()s, see the Dec. 2016 version
+                 *           https://www.kernel.org/doc/html/v4.11/core-api/cpu_hotplug.html */
+                cpus_read_lock();
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
 	/* 4.10 says just to use get_online_cpus()s, see the Dec. 2016 version
 	  https://www.kernel.org/doc/html/v4.11/core-api/cpu_hotplug.html */
 	get_online_cpus();
@@ -611,8 +619,21 @@ err_buffers:
 	on_each_cpu(ibs_setup_lvt, NULL, 1, 1);
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0)
+         /* Once we have cpuhp_setup_state(), this will also create the device
+            because ibs_online_up is called per device. */
+         /* We currently set up everything on CPUHP_AP_ONLINE_DYN because it's
+            likely that we are not the first device on this chain. Current
+            kernels have a bug where, if you are the first device on a DYN
+            notifier chain, your removal from that chain will fail. See:
+            https://lkml.org/lkml/2017/7/5/574 */
+         ibs_hotplug_notifier = cpuhp_setup_state(CPUHP_AP_ONLINE_DYN,
+                         "cpu/ibs:online", ibs_online_up, ibs_prepare_down);
+         if (ibs_hotplug_notifier < 0)
+                 goto out_chrdev;
+         cpus_read_unlock();
 /* Set up the devices and the hotplug notifiers. */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
 	/* Once we have cpuhp_setup_state(), this will also create the device
 	   because ibs_online_up is called per device. */
 	/* We currently set up everything on CPUHP_AP_ONLINE_DYN because it's
@@ -649,7 +670,9 @@ err_buffers:
 	cpu_notifier_register_done();
 #else
 	register_hotcpu_notifier(&ibs_class_cpu_notifier);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0)
+        cpus_read_unlock();
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 	put_online_cpus();
 #endif // >= 2.6.25
 #endif // >= 3.15.0
