@@ -248,7 +248,7 @@ static inline void handle_ibs_op_event(struct pt_regs *regs)
 	}
 	}
 
-//out:
+out:
 	tmp = randomize_op_ctl(dev->ctl);
 	if (dev->workaround_fam15h_err_718)
 		wrmsrl(MSR_IBS_OP_DATA3, 0ULL);
