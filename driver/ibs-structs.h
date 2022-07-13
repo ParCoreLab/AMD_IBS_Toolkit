@@ -66,6 +66,7 @@ struct ibs_dev {
 	atomic_long_t rd;	/* read index */
 	atomic_long_t entries;	/* buffer occupancy in entries */
 	atomic_long_t lost;	/* dropped samples counter */
+	atomic_t being_read_status; /* whether the sample buffer is being read */
 	struct mutex read_lock;	/* read lock */
 
 	wait_queue_head_t readq;	/* wait queue for blocking read */

@@ -295,7 +295,9 @@ ssize_t ibs_read(struct file *file, char __user *buf, size_t count,
 			return -ERESTARTSYS;*/
 		mutex_lock(&dev->read_lock);
 	}
+	atomic_set(&dev->being_read_status, 1);
 	retval = do_ibs_read(dev, buf, count);
+	atomic_set(&dev->being_read_status, 0);
 	mutex_unlock(&dev->read_lock);
 	// send signal from here
 	return retval;
@@ -541,6 +543,7 @@ long ibs_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		dev->mem_access_sample = 0;
 		dev->valid_mem_access_sample = 0;
 		dev->ctl_temp = 0;
+		atomic_set(&dev->being_read_status, 0);
                 break;
 	default:	/* Command not recognized */
 		retval = -ENOTTY;

@@ -190,11 +190,14 @@ static inline void handle_ibs_op_event(struct pt_regs *regs)
 	if (!(tmp & IBS_OP_MAX_CNT))
 		return;
 
+//#if 0
 	if (new_wr == atomic_long_read(&dev->rd)) {	/* Full buffer */
 		atomic_long_inc(&dev->lost);
 		goto out;
 	}
+//#endif
 
+	if(atomic_read(&dev->being_read_status) == 0) {
 	dev->micro_op_sample++;
 	rdmsrl(MSR_IBS_OP_DATA, op_data_tmp);
 	rdmsrl(MSR_IBS_OP_DATA3, op_data3_tmp);
@@ -243,8 +246,9 @@ static inline void handle_ibs_op_event(struct pt_regs *regs)
 		wake_up_queues(dev);
 #endif
 	}
+	}
 
-out:
+//out:
 	tmp = randomize_op_ctl(dev->ctl);
 	if (dev->workaround_fam15h_err_718)
 		wrmsrl(MSR_IBS_OP_DATA3, 0ULL);
