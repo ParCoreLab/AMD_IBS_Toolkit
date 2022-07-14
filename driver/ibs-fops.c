@@ -278,10 +278,10 @@ ssize_t ibs_read(struct file *file, char __user *buf, size_t count,
 	while (!atomic_long_read(&dev->entries)) {	/* No data */
 		mutex_unlock(&dev->read_lock);
 
-		/* If IBS is enabled, return nothing */
+		/* If IBS is disabled, return nothing */
 		mutex_lock(&dev->ctl_lock);
-		if ((dev->flavor == IBS_OP && (dev->ctl & IBS_OP_EN)) ||
-		(dev->flavor == IBS_FETCH && (dev->ctl & IBS_FETCH_EN))) {
+		if ((dev->flavor == IBS_OP && !(dev->ctl & IBS_OP_EN)) ||
+		(dev->flavor == IBS_FETCH && !(dev->ctl & IBS_FETCH_EN))) {
 			mutex_unlock(&dev->ctl_lock);
 			return 0;
 		}
