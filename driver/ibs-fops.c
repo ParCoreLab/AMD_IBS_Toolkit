@@ -229,19 +229,25 @@ static ssize_t do_ibs_read(struct ibs_dev *dev, char __user *buf, size_t count)
 
 	/* Read this much: */
 	count = min(count, (size_t)(entries * dev->entry_size));
-	if (count == 0)
+	if (count == 0) {
+		//printk(KERN_ERR "reading failure 3\n");
 		return 0;
+	}
 
 	if (rd < wr) {	/* Buffer has not wrapped */
-		if (copy_to_user(buf, rd_ptr, count))
+		if (copy_to_user(buf, rd_ptr, count)) {
+			//printk(KERN_ERR "reading failure 4\n");
 			return -EFAULT;
+		}
 	} else {	/* Buffer has wrapped */
 
 		/* First, read up to end of buffer */
 		size_t bytes_to_end = (dev->capacity - rd) * dev->entry_size;
 		size_t bytes_to_read = min(count, bytes_to_end);
-		if (copy_to_user(buf, rd_ptr, bytes_to_read))
+		if (copy_to_user(buf, rd_ptr, bytes_to_read)) {
+			//printk(KERN_ERR "reading failure 5\n");
 			return -EFAULT;
+		}
 
 		/* If necessary, complete the read at buffer start */
 		if (count > bytes_to_end) {
@@ -249,14 +255,17 @@ static ssize_t do_ibs_read(struct ibs_dev *dev, char __user *buf, size_t count)
 			rd_ptr = dev->buf;
 			bytes_to_read = min(count - bytes_to_end,
 					(size_t)(wr * dev->entry_size));
-			if (copy_to_user(buf, rd_ptr, bytes_to_read))
+			if (copy_to_user(buf, rd_ptr, bytes_to_read)) {
+				//printk(KERN_ERR "reading failure 6\n");
 				return -EFAULT;
+			}
 		}
 	}
 	entries_read = count / dev->entry_size;
 	rd = (rd + entries_read) % dev->capacity;
 	atomic_long_set(&dev->rd, rd);
 	atomic_long_sub(entries_read, &dev->entries);
+	//printk(KERN_ERR "entries_read: %ld\n", entries_read);
 	return count;
 }
 
@@ -266,8 +275,10 @@ ssize_t ibs_read(struct file *file, char __user *buf, size_t count,
 	struct ibs_dev *dev = file->private_data;
 	ssize_t retval;
 
-	if (count < dev->entry_size || count > dev->size)
+	if (count < dev->entry_size || count > dev->size) {
+		//printk(KERN_ERR "reading failure 2, count: %ld, entry_size: %lld\n", count, dev->entry_size);
 		return -EINVAL;
+	}
 	/* Make count a multiple of the entry size */
 	count -= count % dev->entry_size;
 
@@ -280,15 +291,17 @@ ssize_t ibs_read(struct file *file, char __user *buf, size_t count,
 
 		/* If IBS is disabled, return nothing */
 		mutex_lock(&dev->ctl_lock);
-		if ((dev->flavor == IBS_OP && !(dev->ctl & IBS_OP_EN)) ||
-		(dev->flavor == IBS_FETCH && !(dev->ctl & IBS_FETCH_EN))) {
+		if ((dev->flavor == IBS_OP && (dev->ctl & IBS_OP_EN)) ||
+		(dev->flavor == IBS_FETCH && (dev->ctl & IBS_FETCH_EN))) {
 			mutex_unlock(&dev->ctl_lock);
 			return 0;
 		}
 		mutex_unlock(&dev->ctl_lock);
 	
-		if (file->f_flags & O_NONBLOCK)
+		if (file->f_flags & O_NONBLOCK) {
+			//printk(KERN_ERR "reading failure 1\n");
 			return -EAGAIN;
+		}
 		/*if (wait_event_interruptible(dev->readq,
 					(atomic_long_read(&dev->rd) !=
 					atomic_long_read(&dev->wr))))

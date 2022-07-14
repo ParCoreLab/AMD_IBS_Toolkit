@@ -172,8 +172,8 @@ static inline void handle_ibs_op_event(struct pt_regs *regs)
 #else
 	struct ibs_dev *dev = per_cpu_ptr(pcpu_op_dev, smp_processor_id());
 #endif
-	unsigned int old_wr = atomic_long_read(&dev->wr);
-	unsigned int new_wr = (old_wr + 1) % dev->capacity;
+	unsigned int old_wr;
+	unsigned int new_wr;
 	struct ibs_op *sample;
 	struct task_struct *target_process = NULL;
 	u64 tmp, op_data_tmp, op_data3_tmp;
@@ -190,12 +190,12 @@ static inline void handle_ibs_op_event(struct pt_regs *regs)
 	if (!(tmp & IBS_OP_MAX_CNT))
 		return;
 
-//#if 0
+#if 0
 	if (new_wr == atomic_long_read(&dev->rd)) {	/* Full buffer */
 		atomic_long_inc(&dev->lost);
 		goto out;
 	}
-//#endif
+#endif
 
 	if(atomic_read(&dev->being_read_status) == 0) {
 	dev->micro_op_sample++;
@@ -207,6 +207,14 @@ static inline void handle_ibs_op_event(struct pt_regs *regs)
 	}
 
 	if( !(op_data_tmp & IBS_RIP_INVALID) && ((op_data3_tmp & IBS_LD_OP) || (op_data3_tmp & IBS_ST_OP)) && (op_data3_tmp & IBS_DC_LIN_ADDR_VALID) && user_mode(regs)) {	
+		old_wr = atomic_long_read(&dev->wr);
+        	new_wr = (old_wr + 1) % dev->capacity;	
+
+		if (new_wr == atomic_long_read(&dev->rd)) {     /* Full buffer */
+                	atomic_long_inc(&dev->lost);
+                	goto out;
+        	}	
+
 		dev->valid_mem_access_sample++;
 		sample = (struct ibs_op *)(dev->buf + (old_wr * dev->entry_size));
 
@@ -231,12 +239,13 @@ static inline void handle_ibs_op_event(struct pt_regs *regs)
                 	info.si_signo = /*PERF_SIGNAL;*/SIGNEW;
                 	info.si_code = SI_QUEUE;
                 	info.si_fd = dev->fd;
-                	//printk(KERN_INFO "interrupt happens in thread %d or %d and handled by workqueue, but signal is sent to thread %d\n", current->pid, get_current()->pid, target_process->pid);
+                	//printk(KERN_ERR "interrupt happens in thread %d or %d and handled by workqueue, but signal is sent to thread %d\n", current->pid, get_current()->pid, target_process->pid);
                 	if(send_sig_info(/*PERF_SIGNAL*/ SIGNEW, &info, target_process) < 0) {
                         	printk(KERN_INFO "Unable to send signal\n");
                 	}
         	}	
 	//printk(KERN_INFO "interrupt1 happens in thread %d or %d, but signal is sent to thread %d\n", current->pid, get_current()->pid, target_process->pid);
+#if 0
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
 		irq_work_queue(&dev->bottom_half);
 	//tasklet_schedule(&dev->bottom_half);
@@ -244,6 +253,7 @@ static inline void handle_ibs_op_event(struct pt_regs *regs)
 	/* Add more work directly into the NMI handler, but in older kernels, we
 	 * didn't have access to IRQ work queues. */
 		wake_up_queues(dev);
+#endif
 #endif
 	}
 	}
